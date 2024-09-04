@@ -13,3 +13,17 @@ CloudSeal is particularly useful for encrypting data in folders that are synchro
 - Create compressed 7z archives.
 - Command-line interface for ease of use.
 - Secure file handling and encryption process.
+
+## Installation
+
+1. Build the project:
+
+    ```bash
+    dotnet build
+    ```
+
+2. Locate the two `.exe` files generated from the build. These are typically found in the `bin/Debug/net6.0` or `bin/Release/net6.0` directory.
+
+3. Place both `.exe` files in any folder of your choice.
+
+4. Run `CloudSeal.exe` to start the application.
