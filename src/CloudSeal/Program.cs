@@ -19,9 +19,9 @@ class Program
 
         while (true) // Цикл для повторного отображения меню
         {
-            Console.WriteLine("Выберите действие:");
-            Console.WriteLine("1: Сохранить данные");
-            Console.WriteLine("2: Прочитать данные");
+            Console.WriteLine("\nВыберите действие:"); // Добавлен отступ
+            Console.WriteLine("1: Синхронизировать локальные данные с облаком");
+            Console.WriteLine("2: Синхронизировать облако с локальными данными");
             Console.WriteLine("3: Управление секретным ключом");
             var choice = Console.ReadLine();
 
@@ -29,11 +29,11 @@ class Program
             {
                 case "1":
                     var fileProcessor = new FileProcessor(secretKey, "Local", "SealedCloud");
-                    fileProcessor.ProcessFiles();
+                    fileProcessor.SyncLocalWithCloud();
                     break;
                 case "2":
-                    fileProcessor = new FileProcessor(secretKey, "View", "SealedCloud");
-                    fileProcessor.ReadUserSelectedFiles();
+                    fileProcessor = new FileProcessor(secretKey, "Local", "SealedCloud");
+                    fileProcessor.SyncCloudWithLocal();
                     break;
                 case "3":
                     ManageSecretKey(secretKeyManager);
@@ -53,7 +53,7 @@ class Program
         while (string.IsNullOrEmpty(secretKey))
         {
             Console.WriteLine("Неверный пароль.");
-            Console.WriteLine("Выберите действие:");
+            Console.WriteLine("\nВыберите действие:"); // Добавлен отступ
             Console.WriteLine("1: Повторить ввод пароля");
             Console.WriteLine("2: Удалить ключ и создать новый");
             var choice = Console.ReadLine();
@@ -80,7 +80,7 @@ class Program
         Console.WriteLine($"Текущий секретный ключ: {secretKeyManager.GetSecretKeyName()}");
         Console.WriteLine($"Секретный ключ: {secretKeyManager.GetSecretKey()}");
 
-        Console.WriteLine("Выберите действие:");
+        Console.WriteLine("\nВыберите действие:"); // Добавлен отступ
         Console.WriteLine("1: Вернуться");
         Console.WriteLine("2: Удалить секретный ключ");
         var choice = Console.ReadLine();

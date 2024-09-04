@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using System.IO;
 
 class FileProcessor
 {
@@ -16,86 +18,81 @@ class FileProcessor
         Directory.CreateDirectory(_outputDirectory);
     }
 
-    public void ProcessFiles()
+    // Синхронизация облачных данных с локальными
+    public void SyncCloudWithLocal()
     {
+        int addedFilesCount = 0;
         var files = Directory.GetFiles(_inputDirectory, "*.*", SearchOption.AllDirectories);
         foreach (var file in files)
         {
             if (Path.GetExtension(file) == ".7z" || Path.GetExtension(file) == ".exe") continue;
 
             var relativePath = Path.GetRelativePath(_inputDirectory, file);
-            var outputFilePath = Path.Combine(
-                _outputDirectory,
-                Path.GetDirectoryName(relativePath),
-                Path.GetFileName(file) + ".7z" // Используем двойное расширение
-            );
+            var outputFilePath = Path.Combine(_outputDirectory, Path.GetDirectoryName(relativePath), Path.GetFileName(file) + ".7z");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
             ArchiveFile(file, outputFilePath);
+            addedFilesCount++;
         }
 
-        // Синхронизация удалений между Local и SealedCloud
-        SynchronizeDeletions();
+        // Удаляем из облака файлы, которых больше нет в локальной директории
+        RemoveOrphanedFilesInCloud();
+
+        Console.WriteLine($"\nСинхронизация завершена. Добавлено файлов: {addedFilesCount}");
     }
 
-    public void ReadUserSelectedFiles()
+    // Синхронизация локальных данных с облаком
+    public void SyncLocalWithCloud()
     {
-        var directories = Directory.GetDirectories(_outputDirectory)
-                                   .Where(dir => !Path.GetFileName(dir).StartsWith("."))
-                                   .ToArray();
-
-        if (directories.Length == 0 || (directories.Length == 1 && Directory.GetFiles(_outputDirectory).Length == 0))
+        int addedFilesCount = 0;
+        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
+        foreach (var sealedFile in sealedFiles)
         {
-            ReadFiles(_outputDirectory);
-        }
-        else
-        {
-            Console.WriteLine("Select a folder to view:");
-            Console.WriteLine("0: View all");
+            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile).Replace(".7z", "");
+            var localFilePath = Path.Combine(_inputDirectory, relativePath);
 
-            for (int i = 0; i < directories.Length; i++)
+            if (!File.Exists(localFilePath))
             {
-                var dir = directories[i];
-                var fileCount = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories).Length;
-                Console.WriteLine($"{i + 1}: {Path.GetFileName(dir)} ({fileCount} files)");
-            }
-
-            if (int.TryParse(Console.ReadLine(), out int selectedIndex))
-            {
-                if (selectedIndex == 0)
-                {
-                    ReadFiles(_outputDirectory);
-                }
-                else if (selectedIndex > 0 && selectedIndex <= directories.Length)
-                {
-                    ReadFiles(directories[selectedIndex - 1]);
-                }
-                else
-                {
-                    Console.WriteLine("Invalid selection. Exiting.");
-                    return;
-                }
-            }
-            else
-            {
-                Console.WriteLine("Invalid input. Exiting.");
-                return;
+                ExtractFile(sealedFile, localFilePath);
+                addedFilesCount++;
             }
         }
 
-        OpenFolderInExplorer(_inputDirectory);
+        // Удаляем из локальной директории файлы, которые отсутствуют в облаке
+        RemoveOrphanedFilesLocally();
+
+        Console.WriteLine($"\nСинхронизация завершена. Добавлено файлов: {addedFilesCount}");
     }
 
-    private void ReadFiles(string pathToRead)
+    private void RemoveOrphanedFilesInCloud()
     {
-        var files = Directory.GetFiles(pathToRead, "*.7z", SearchOption.AllDirectories);
-        foreach (var file in files)
+        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
+        foreach (var sealedFile in sealedFiles)
         {
-            var relativePath = Path.GetRelativePath(_outputDirectory, file);
-            var extractPath = Path.Combine(_inputDirectory, Path.GetDirectoryName(relativePath));
+            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile).Replace(".7z", "");
+            var localFile = Path.Combine(_inputDirectory, relativePath);
 
-            Directory.CreateDirectory(extractPath);
-            ExtractFile(file, extractPath);
+            if (!File.Exists(localFile))
+            {
+                File.Delete(sealedFile); // Удалить архив, если исходный файл отсутствует
+                Console.WriteLine($"Удален архивированный файл из облака: {sealedFile}");
+            }
+        }
+    }
+
+    private void RemoveOrphanedFilesLocally()
+    {
+        var localFiles = Directory.GetFiles(_inputDirectory, "*.*", SearchOption.AllDirectories);
+        foreach (var localFile in localFiles)
+        {
+            var relativePath = Path.GetRelativePath(_inputDirectory, localFile);
+            var cloudFilePath = Path.Combine(_outputDirectory, relativePath + ".7z");
+
+            if (!File.Exists(cloudFilePath))
+            {
+                File.Delete(localFile); // Удалить локальный файл, если его нет в облаке
+                Console.WriteLine($"Удален файл из локальной директории: {localFile}");
+            }
         }
     }
 
@@ -115,9 +112,12 @@ class FileProcessor
         process.WaitForExit();
     }
 
-    private void ExtractFile(string inputFile, string extractPath)
+    private void ExtractFile(string inputFile, string outputFile)
     {
-        var command = $".\\7z.exe x \"{inputFile}\" -o\"{extractPath}\" -p\"{_secretKey}\" -y";
+        var outputPath = Path.GetDirectoryName(outputFile);
+        Directory.CreateDirectory(outputPath);
+
+        var command = $".\\7z.exe x \"{inputFile}\" -o\"{outputPath}\" -p\"{_secretKey}\" -y";
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "cmd.exe",
@@ -129,50 +129,5 @@ class FileProcessor
 
         using var process = Process.Start(processStartInfo);
         process.WaitForExit();
-    }
-
-    private void OpenFolderInExplorer(string path)
-    {
-        Process.Start("explorer.exe", path);
-    }
-
-    private void SynchronizeDeletions()
-    {
-        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
-        foreach (var sealedFile in sealedFiles)
-        {
-            // Отбрасываем расширение .7z для проверки наличия исходного файла
-            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile);
-            var originalFilePath = relativePath.Substring(0, relativePath.Length - 3); // Убираем ".7z"
-            var originalFile = Path.Combine(_inputDirectory, originalFilePath);
-
-            if (!File.Exists(originalFile) && !Path.GetFileName(sealedFile).StartsWith(".") && !IsHidden(sealedFile))
-            {
-                File.Delete(sealedFile); // Удалить архив, если исходный файл отсутствует и это не скрытый файл
-                Console.WriteLine($"Удален архивированный файл: {sealedFile}");
-            }
-        }
-
-        // Удаление пустых директорий, если они не скрыты и не начинаются с точки
-        DeleteEmptyDirectories(_outputDirectory);
-    }
-
-    private bool IsHidden(string path)
-    {
-        var attributes = File.GetAttributes(path);
-        return (attributes & FileAttributes.Hidden) == FileAttributes.Hidden;
-    }
-
-    private void DeleteEmptyDirectories(string startLocation)
-    {
-        foreach (var directory in Directory.GetDirectories(startLocation))
-        {
-            DeleteEmptyDirectories(directory);
-            var isHidden = (File.GetAttributes(directory) & FileAttributes.Hidden) == FileAttributes.Hidden;
-            if (Directory.GetFiles(directory).Length == 0 && Directory.GetDirectories(directory).Length == 0 && !Path.GetFileName(directory).StartsWith(".") && !isHidden)
-            {
-                Directory.Delete(directory);
-            }
-        }
     }
 }
