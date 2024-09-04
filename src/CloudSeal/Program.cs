@@ -18,7 +18,7 @@ if (choice == "1")
 else if (choice == "2")
 {
     var fileProcessor = new FileProcessor(secretKey, "View", "SealedCloud");
-    fileProcessor.ReadFiles();
+    fileProcessor.ReadUserSelectedFiles();
 }
 else
 {

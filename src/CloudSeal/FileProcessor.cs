@@ -94,5 +94,71 @@ class FileProcessor
             }
         }
     }
+
+    public void ReadUserSelectedFiles()
+    {
+        var directories = Directory.GetDirectories(_outputDirectory)
+            .Where(dir => !Path.GetFileName(dir).StartsWith("."))
+            .ToArray();
+
+        if (directories.Length == 0 || (directories.Length == 1 && Directory.GetFiles(_outputDirectory).Length == 0))
+        {
+            ReadFiles(_outputDirectory);
+        }
+        else
+        {
+            Console.WriteLine("Select a folder to view:");
+            Console.WriteLine("0: View all");
+
+            for (int i = 0; i < directories.Length; i++)
+            {
+                var dir = directories[i];
+                var fileCount = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories).Length;
+                Console.WriteLine($"{i + 1}: {Path.GetFileName(dir)} ({fileCount} files)");
+            }
+
+            if (int.TryParse(Console.ReadLine(), out int selectedIndex))
+            {
+                if (selectedIndex == 0)
+                {
+                    ReadFiles(_outputDirectory);
+                }
+                else if (selectedIndex > 0 && selectedIndex <= directories.Length)
+                {
+                    ReadFiles(directories[selectedIndex - 1]);
+                }
+                else
+                {
+                    Console.WriteLine("Invalid selection. Exiting.");
+                    return;
+                }
+            }
+            else
+            {
+                Console.WriteLine("Invalid input. Exiting.");
+                return;
+            }
+        }
+
+        OpenFolderInExplorer(_inputDirectory);
+    }
+
+    private void ReadFiles(string pathToRead)
+    {
+        var files = Directory.GetFiles(pathToRead, "*.7z", SearchOption.AllDirectories);
+        foreach (var file in files)
+        {
+            var relativePath = Path.GetRelativePath(_outputDirectory, file);
+            var extractPath = Path.Combine(_inputDirectory, Path.GetDirectoryName(relativePath));
+
+            Directory.CreateDirectory(extractPath);
+            ExtractFile(file, extractPath);
+        }
+    }
+
+    private void OpenFolderInExplorer(string path)
+    {
+        Process.Start("explorer.exe", path);
+    }
 }
 
