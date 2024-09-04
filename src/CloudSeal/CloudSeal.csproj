@@ -20,6 +20,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="7z.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
