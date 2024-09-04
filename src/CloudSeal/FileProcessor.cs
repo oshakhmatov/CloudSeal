@@ -27,79 +27,22 @@ class FileProcessor
             var outputFilePath = Path.Combine(
                 _outputDirectory,
                 Path.GetDirectoryName(relativePath),
-                Path.GetFileNameWithoutExtension(file) + "_sealed.7z"
+                Path.GetFileName(file) + ".7z" // Используем двойное расширение
             );
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
             ArchiveFile(file, outputFilePath);
-            File.Delete(file);
         }
 
-        DeleteEmptyDirectories(_inputDirectory);
-    }
-
-    public void ReadFiles()
-    {
-        var files = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
-        foreach (var file in files)
-        {
-            var relativePath = Path.GetRelativePath(_outputDirectory, file);
-            var extractPath = Path.Combine(_inputDirectory, Path.GetDirectoryName(relativePath));
-
-            Directory.CreateDirectory(extractPath);
-            ExtractFile(file, extractPath);
-        }
-    }
-
-    private void ArchiveFile(string inputFile, string outputFile)
-    {
-        var command = $".\\7z.exe a -t7z \"{outputFile}\" \"{inputFile}\" -mhe=on -mx=9 -p\"{_secretKey}\"";
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = "cmd.exe",
-            Arguments = $"/C {command}",
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(processStartInfo);
-        process.WaitForExit();
-    }
-
-    private void ExtractFile(string inputFile, string extractPath)
-    {
-        var command = $".\\7z.exe x \"{inputFile}\" -o\"{extractPath}\" -p\"{_secretKey}\" -y";
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = "cmd.exe",
-            Arguments = $"/C {command}",
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(processStartInfo);
-        process.WaitForExit();
-    }
-
-    private void DeleteEmptyDirectories(string startLocation)
-    {
-        foreach (var directory in Directory.GetDirectories(startLocation))
-        {
-            DeleteEmptyDirectories(directory);
-            if (Directory.GetFiles(directory).Length == 0 && Directory.GetDirectories(directory).Length == 0)
-            {
-                Directory.Delete(directory);
-            }
-        }
+        // Синхронизация удалений между Local и SealedCloud
+        SynchronizeDeletions();
     }
 
     public void ReadUserSelectedFiles()
     {
         var directories = Directory.GetDirectories(_outputDirectory)
-            .Where(dir => !Path.GetFileName(dir).StartsWith("."))
-            .ToArray();
+                                   .Where(dir => !Path.GetFileName(dir).StartsWith("."))
+                                   .ToArray();
 
         if (directories.Length == 0 || (directories.Length == 1 && Directory.GetFiles(_outputDirectory).Length == 0))
         {
@@ -156,9 +99,80 @@ class FileProcessor
         }
     }
 
+    private void ArchiveFile(string inputFile, string outputFile)
+    {
+        var command = $".\\7z.exe a \"{outputFile}\" \"{inputFile}\" -mhe=on -mx=9 -p\"{_secretKey}\"";
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/C {command}",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processStartInfo);
+        process.WaitForExit();
+    }
+
+    private void ExtractFile(string inputFile, string extractPath)
+    {
+        var command = $".\\7z.exe x \"{inputFile}\" -o\"{extractPath}\" -p\"{_secretKey}\" -y";
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/C {command}",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processStartInfo);
+        process.WaitForExit();
+    }
+
     private void OpenFolderInExplorer(string path)
     {
         Process.Start("explorer.exe", path);
     }
-}
 
+    private void SynchronizeDeletions()
+    {
+        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
+        foreach (var sealedFile in sealedFiles)
+        {
+            // Отбрасываем расширение .7z для проверки наличия исходного файла
+            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile);
+            var originalFilePath = relativePath.Substring(0, relativePath.Length - 3); // Убираем ".7z"
+            var originalFile = Path.Combine(_inputDirectory, originalFilePath);
+
+            if (!File.Exists(originalFile) && !Path.GetFileName(sealedFile).StartsWith(".") && !IsHidden(sealedFile))
+            {
+                File.Delete(sealedFile); // Удалить архив, если исходный файл отсутствует и это не скрытый файл
+                Console.WriteLine($"Удален архивированный файл: {sealedFile}");
+            }
+        }
+
+        // Удаление пустых директорий, если они не скрыты и не начинаются с точки
+        DeleteEmptyDirectories(_outputDirectory);
+    }
+
+    private bool IsHidden(string path)
+    {
+        var attributes = File.GetAttributes(path);
+        return (attributes & FileAttributes.Hidden) == FileAttributes.Hidden;
+    }
+
+    private void DeleteEmptyDirectories(string startLocation)
+    {
+        foreach (var directory in Directory.GetDirectories(startLocation))
+        {
+            DeleteEmptyDirectories(directory);
+            var isHidden = (File.GetAttributes(directory) & FileAttributes.Hidden) == FileAttributes.Hidden;
+            if (Directory.GetFiles(directory).Length == 0 && Directory.GetDirectories(directory).Length == 0 && !Path.GetFileName(directory).StartsWith(".") && !isHidden)
+            {
+                Directory.Delete(directory);
+            }
+        }
+    }
+}

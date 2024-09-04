@@ -16,27 +16,65 @@ class SecretKeyManager
 
         if (credential != null)
         {
-            Console.Write("Enter the password to access the secret key: ");
+            Console.Write("Введите пароль для доступа к секретному ключу: ");
             var password = Console.ReadLine();
             if (!string.IsNullOrEmpty(password) && credential.Password == password)
-                return credential.UserName;
-
-            Console.WriteLine("Incorrect password.");
-            return null;
+            {
+                return credential.UserName; // Возвращаем секретный ключ
+            }
+        }
+        else
+        {
+            return CreateNewSecretKey();
         }
 
-        Console.Write("Enter a password to secure the new secret key: ");
+        return null; // Возвращаем null, если пароль неверный или нет ключа
+    }
+
+    public string CreateNewSecretKey()
+    {
+        Console.Write("Введите новый секретный ключ (оставьте пустым для автоматической генерации): ");
+        var newSecretKey = Console.ReadLine();
+
+        if (string.IsNullOrEmpty(newSecretKey))
+        {
+            newSecretKey = GenerateSecureKey(32);
+            Console.WriteLine("Секретный ключ был автоматически сгенерирован.");
+        }
+
+        Console.Write("Введите пароль для защиты нового секретного ключа: ");
         var newPassword = Console.ReadLine();
         if (string.IsNullOrEmpty(newPassword))
         {
-            Console.WriteLine("Password cannot be empty.");
+            Console.WriteLine("Пароль не может быть пустым.");
             return null;
         }
 
-        var secretKey = GenerateSecureKey(32);
-        CredentialManager.WriteCredential(_credentialName, secretKey, newPassword, "Generated application secret key", CredentialPersistence.LocalMachine);
-        Console.WriteLine($"Secret key '{_credentialName}' has been created and saved with the provided password.");
-        return secretKey;
+        SaveSecretKey(newSecretKey, newPassword);
+        return newSecretKey;
+    }
+
+    public void DeleteSecretKey()
+    {
+        CredentialManager.DeleteCredential(_credentialName);
+        Console.WriteLine("Секретный ключ удален.");
+    }
+
+    public string GetSecretKeyName()
+    {
+        return _credentialName;
+    }
+
+    public string GetSecretKey()
+    {
+        var credential = CredentialManager.ReadCredential(_credentialName);
+        return credential?.UserName;
+    }
+
+    public void SaveSecretKey(string secretKey, string password)
+    {
+        CredentialManager.WriteCredential(_credentialName, secretKey, password, "Application secret key", CredentialPersistence.LocalMachine);
+        Console.WriteLine("Секретный ключ сохранен.");
     }
 
     private static string GenerateSecureKey(int length)
