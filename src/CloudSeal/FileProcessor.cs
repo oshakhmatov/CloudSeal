@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 
 class FileProcessor
 {
@@ -8,124 +6,143 @@ class FileProcessor
     private const string CloudDirectoryName = "SealedCloud";
 
     private readonly string _secretKey;
-    private readonly string _inputDirectory;
-    private readonly string _outputDirectory;
+    private readonly string localDir;
+    private readonly string cloudDir;
 
     public FileProcessor(string secretKey)
     {
         _secretKey = secretKey;
-        _inputDirectory = Path.Combine(Directory.GetCurrentDirectory(), LocalDirectoryName);
-        _outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), CloudDirectoryName);
+        localDir = Path.Combine(Directory.GetCurrentDirectory(), LocalDirectoryName);
+        cloudDir = Path.Combine(Directory.GetCurrentDirectory(), CloudDirectoryName);
 
-        Directory.CreateDirectory(_inputDirectory);
-        Directory.CreateDirectory(_outputDirectory);
-    }
-
-    public void SyncCloudWithLocal()
-    {
-        SyncFiles(_inputDirectory, _outputDirectory, isToCloud: false);
+        Directory.CreateDirectory(localDir);
+        Directory.CreateDirectory(cloudDir);
     }
 
     public void SyncLocalWithCloud()
     {
-        SyncFiles(_inputDirectory, _outputDirectory, isToCloud: true);
+        ClearDirectory(localDir);
+
+        SealLocalData();
+
+        CopyDirectory(cloudDir, localDir);
+        Console.WriteLine("\nСинхронизация локальных данных с облаком завершена.");
     }
 
-    private void SyncFiles(string sourceDirectory, string targetDirectory, bool isToCloud)
+    public void SyncCloudWithLocal()
     {
-        int addedFilesCount = 0;
+        ClearDirectory(cloudDir, preserveSpecial: true);
 
-        if (isToCloud)
-        {
-            // Синхронизация из локальной директории в облако
-            var files = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories);
-            foreach (var file in files)
-            {
-                if (Path.GetExtension(file) == ".7z" || Path.GetExtension(file) == ".exe") continue;
+        CopyDirectory(localDir, cloudDir);
 
-                var relativePath = Path.GetRelativePath(sourceDirectory, file);
-                var outputFilePath = Path.Combine(targetDirectory, Path.GetDirectoryName(relativePath), Path.GetFileName(file) + ".7z");
-
-                Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
-                ArchiveFile(file, outputFilePath);
-                addedFilesCount++;
-            }
-            RemoveOrphanedFiles(sourceDirectory, targetDirectory, isToCloud);
-        }
-        else
-        {
-            // Синхронизация из облака в локальную директорию
-            var sealedFiles = Directory.GetFiles(targetDirectory, "*.7z", SearchOption.AllDirectories);
-            foreach (var sealedFile in sealedFiles)
-            {
-                var relativePath = Path.GetRelativePath(targetDirectory, sealedFile).Replace(".7z", "");
-                var localFilePath = Path.Combine(sourceDirectory, relativePath);
-
-                ExtractFile(sealedFile, localFilePath);
-                addedFilesCount++;
-            }
-            RemoveOrphanedFiles(sourceDirectory, targetDirectory, isToCloud);
-        }
-
-        Console.WriteLine($"\nСинхронизация завершена. Добавлено файлов: {addedFilesCount}");
+        Console.WriteLine("\nСинхронизация облачных данных с локальными завершена.");
     }
 
-    private void RemoveOrphanedFiles(string sourceDirectory, string targetDirectory, bool isToCloud)
+    public void SealLocalData()
     {
-        if (isToCloud)
-        {
-            var sealedFiles = Directory.GetFiles(targetDirectory, "*.7z", SearchOption.AllDirectories);
-            foreach (var sealedFile in sealedFiles)
-            {
-                var relativePath = Path.GetRelativePath(targetDirectory, sealedFile).Replace(".7z", "");
-                var localFile = Path.Combine(sourceDirectory, relativePath);
+        long totalOriginalSize = 0;
+        long totalSealedSize = 0;
 
-                if (!File.Exists(localFile))
+        ProcessFiles(localDir, file =>
+        {
+            if (Path.GetExtension(file) != ".7z")
+            {
+                totalOriginalSize += new FileInfo(file).Length;
+
+                var sealedFilePath = file + ".7z";
+                ArchiveFile(file, sealedFilePath);
+                File.Delete(file);
+
+                totalSealedSize += new FileInfo(sealedFilePath).Length;
+
+                var fileName = Path.GetFileName(file);
+                var sealedFileName = Path.GetFileName(sealedFilePath);
+                Console.WriteLine($"{fileName} -> {sealedFileName}");
+            }
+        });
+
+        long spaceSaved = totalOriginalSize - totalSealedSize;
+        Console.WriteLine($"Общий размер после запечатывания: {totalSealedSize / 1024.0 / 1024.0:F2} MB");
+        Console.WriteLine($"Сэкономлено места на диске: {spaceSaved / 1024.0 / 1024.0:F2} MB");
+    }
+
+
+    public void UnsealLocalData()
+    {
+        ProcessFiles(localDir, sealedFile =>
+        {
+            if (Path.GetExtension(sealedFile) == ".7z")
+            {
+                var originalFilePath = sealedFile.Substring(0, sealedFile.Length - 3);
+                if (!File.Exists(originalFilePath))
                 {
+                    ExtractFile(sealedFile, originalFilePath);
                     File.Delete(sealedFile);
-                    Console.WriteLine($"Удален архивированный файл из облака: {sealedFile}");
+                    var sealedFileName = Path.GetFileName(sealedFile);
+                    var originalFileName = Path.GetFileName(originalFilePath);
+                    Console.WriteLine($"{sealedFileName} -> {originalFileName}");
                 }
             }
-        }
-        else
-        {
-            var localFiles = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories);
-            foreach (var localFile in localFiles)
-            {
-                var relativePath = Path.GetRelativePath(sourceDirectory, localFile);
-                var cloudFilePath = Path.Combine(targetDirectory, relativePath + ".7z");
+        });
+    }
 
-                if (!File.Exists(cloudFilePath))
-                {
-                    File.Delete(localFile);
-                    Console.WriteLine($"Удален файл из локальной директории: {localFile}");
-                }
-            }
+    private void ProcessFiles(string directory, Action<string> fileAction)
+    {
+        var files = Directory.GetFiles(directory, "*.*", SearchOption.AllDirectories);
+        foreach (var file in files)
+        {
+            fileAction(file);
+        }
+    }
+
+    private void ClearDirectory(string directory, bool preserveSpecial = false)
+    {
+        foreach (var file in Directory.GetFiles(directory, "*", SearchOption.AllDirectories))
+        {
+            if (preserveSpecial && (File.GetAttributes(file) & FileAttributes.Hidden) != 0 || Path.GetFileName(file).StartsWith("."))
+                continue;
+
+            File.Delete(file);
+        }
+
+        foreach (var dir in Directory.GetDirectories(directory))
+        {
+            if (preserveSpecial && new DirectoryInfo(dir).Name.StartsWith("."))
+                continue;
+
+            Directory.Delete(dir, true);
+        }
+    }
+
+    private void CopyDirectory(string sourceDir, string targetDir)
+    {
+        Directory.CreateDirectory(targetDir);
+
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(targetDir, Path.GetFileName(file));
+            File.Copy(file, destFile, true);
+        }
+
+        foreach (var directory in Directory.GetDirectories(sourceDir))
+        {
+            var destDir = Path.Combine(targetDir, Path.GetFileName(directory));
+            CopyDirectory(directory, destDir);
         }
     }
 
     private void ArchiveFile(string inputFile, string outputFile)
     {
-        var command = $".\\7z.exe a \"{outputFile}\" \"{inputFile}\" -mhe=on -mx=9 -p\"{_secretKey}\"";
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = "cmd.exe",
-            Arguments = $"/C {command}",
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(processStartInfo);
-        process.WaitForExit();
+        ExecuteCommand($".\\7z.exe a \"{outputFile}\" \"{inputFile}\" -mhe=on -mx=9 -p\"{_secretKey}\"");
     }
 
     private void ExtractFile(string inputFile, string outputFile)
     {
-        var outputPath = Path.GetDirectoryName(outputFile);
-        Directory.CreateDirectory(outputPath);
+        ExecuteCommand($".\\7z.exe x \"{inputFile}\" -o\"{Path.GetDirectoryName(outputFile)}\" -p\"{_secretKey}\" -y");
+    }
 
-        var command = $".\\7z.exe x \"{inputFile}\" -o\"{outputPath}\" -p\"{_secretKey}\" -y";
+    private void ExecuteCommand(string command)
+    {
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "cmd.exe",
