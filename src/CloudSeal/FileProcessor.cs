@@ -4,94 +4,102 @@ using System.IO;
 
 class FileProcessor
 {
+    private const string LocalDirectoryName = "Local";
+    private const string CloudDirectoryName = "SealedCloud";
+
     private readonly string _secretKey;
     private readonly string _inputDirectory;
     private readonly string _outputDirectory;
 
-    public FileProcessor(string secretKey, string inputDirectory, string outputDirectory)
+    public FileProcessor(string secretKey)
     {
         _secretKey = secretKey;
-        _inputDirectory = Path.Combine(Directory.GetCurrentDirectory(), inputDirectory);
-        _outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), outputDirectory);
+        _inputDirectory = Path.Combine(Directory.GetCurrentDirectory(), LocalDirectoryName);
+        _outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), CloudDirectoryName);
 
         Directory.CreateDirectory(_inputDirectory);
         Directory.CreateDirectory(_outputDirectory);
     }
 
-    // Синхронизация облачных данных с локальными
     public void SyncCloudWithLocal()
     {
-        int addedFilesCount = 0;
-        var files = Directory.GetFiles(_inputDirectory, "*.*", SearchOption.AllDirectories);
-        foreach (var file in files)
-        {
-            if (Path.GetExtension(file) == ".7z" || Path.GetExtension(file) == ".exe") continue;
-
-            var relativePath = Path.GetRelativePath(_inputDirectory, file);
-            var outputFilePath = Path.Combine(_outputDirectory, Path.GetDirectoryName(relativePath), Path.GetFileName(file) + ".7z");
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
-            ArchiveFile(file, outputFilePath);
-            addedFilesCount++;
-        }
-
-        // Удаляем из облака файлы, которых больше нет в локальной директории
-        RemoveOrphanedFilesInCloud();
-
-        Console.WriteLine($"\nСинхронизация завершена. Добавлено файлов: {addedFilesCount}");
+        SyncFiles(_inputDirectory, _outputDirectory, isToCloud: false);
     }
 
-    // Синхронизация локальных данных с облаком
     public void SyncLocalWithCloud()
     {
-        int addedFilesCount = 0;
-        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
-        foreach (var sealedFile in sealedFiles)
-        {
-            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile).Replace(".7z", "");
-            var localFilePath = Path.Combine(_inputDirectory, relativePath);
+        SyncFiles(_inputDirectory, _outputDirectory, isToCloud: true);
+    }
 
-            if (!File.Exists(localFilePath))
+    private void SyncFiles(string sourceDirectory, string targetDirectory, bool isToCloud)
+    {
+        int addedFilesCount = 0;
+
+        if (isToCloud)
+        {
+            // Синхронизация из локальной директории в облако
+            var files = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories);
+            foreach (var file in files)
             {
+                if (Path.GetExtension(file) == ".7z" || Path.GetExtension(file) == ".exe") continue;
+
+                var relativePath = Path.GetRelativePath(sourceDirectory, file);
+                var outputFilePath = Path.Combine(targetDirectory, Path.GetDirectoryName(relativePath), Path.GetFileName(file) + ".7z");
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
+                ArchiveFile(file, outputFilePath);
+                addedFilesCount++;
+            }
+            RemoveOrphanedFiles(sourceDirectory, targetDirectory, isToCloud);
+        }
+        else
+        {
+            // Синхронизация из облака в локальную директорию
+            var sealedFiles = Directory.GetFiles(targetDirectory, "*.7z", SearchOption.AllDirectories);
+            foreach (var sealedFile in sealedFiles)
+            {
+                var relativePath = Path.GetRelativePath(targetDirectory, sealedFile).Replace(".7z", "");
+                var localFilePath = Path.Combine(sourceDirectory, relativePath);
+
                 ExtractFile(sealedFile, localFilePath);
                 addedFilesCount++;
             }
+            RemoveOrphanedFiles(sourceDirectory, targetDirectory, isToCloud);
         }
-
-        // Удаляем из локальной директории файлы, которые отсутствуют в облаке
-        RemoveOrphanedFilesLocally();
 
         Console.WriteLine($"\nСинхронизация завершена. Добавлено файлов: {addedFilesCount}");
     }
 
-    private void RemoveOrphanedFilesInCloud()
+    private void RemoveOrphanedFiles(string sourceDirectory, string targetDirectory, bool isToCloud)
     {
-        var sealedFiles = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
-        foreach (var sealedFile in sealedFiles)
+        if (isToCloud)
         {
-            var relativePath = Path.GetRelativePath(_outputDirectory, sealedFile).Replace(".7z", "");
-            var localFile = Path.Combine(_inputDirectory, relativePath);
-
-            if (!File.Exists(localFile))
+            var sealedFiles = Directory.GetFiles(targetDirectory, "*.7z", SearchOption.AllDirectories);
+            foreach (var sealedFile in sealedFiles)
             {
-                File.Delete(sealedFile); // Удалить архив, если исходный файл отсутствует
-                Console.WriteLine($"Удален архивированный файл из облака: {sealedFile}");
+                var relativePath = Path.GetRelativePath(targetDirectory, sealedFile).Replace(".7z", "");
+                var localFile = Path.Combine(sourceDirectory, relativePath);
+
+                if (!File.Exists(localFile))
+                {
+                    File.Delete(sealedFile);
+                    Console.WriteLine($"Удален архивированный файл из облака: {sealedFile}");
+                }
             }
         }
-    }
-
-    private void RemoveOrphanedFilesLocally()
-    {
-        var localFiles = Directory.GetFiles(_inputDirectory, "*.*", SearchOption.AllDirectories);
-        foreach (var localFile in localFiles)
+        else
         {
-            var relativePath = Path.GetRelativePath(_inputDirectory, localFile);
-            var cloudFilePath = Path.Combine(_outputDirectory, relativePath + ".7z");
-
-            if (!File.Exists(cloudFilePath))
+            var localFiles = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories);
+            foreach (var localFile in localFiles)
             {
-                File.Delete(localFile); // Удалить локальный файл, если его нет в облаке
-                Console.WriteLine($"Удален файл из локальной директории: {localFile}");
+                var relativePath = Path.GetRelativePath(sourceDirectory, localFile);
+                var cloudFilePath = Path.Combine(targetDirectory, relativePath + ".7z");
+
+                if (!File.Exists(cloudFilePath))
+                {
+                    File.Delete(localFile);
+                    Console.WriteLine($"Удален файл из локальной директории: {localFile}");
+                }
             }
         }
     }
