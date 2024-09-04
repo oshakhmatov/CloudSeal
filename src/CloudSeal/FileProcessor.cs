@@ -1,7 +1,5 @@
 ﻿using System.Diagnostics;
 
-namespace CloudSeal;
-
 class FileProcessor
 {
     private readonly string _secretKey;
@@ -40,9 +38,38 @@ class FileProcessor
         DeleteEmptyDirectories(_inputDirectory);
     }
 
+    public void ReadFiles()
+    {
+        var files = Directory.GetFiles(_outputDirectory, "*.7z", SearchOption.AllDirectories);
+        foreach (var file in files)
+        {
+            var relativePath = Path.GetRelativePath(_outputDirectory, file);
+            var extractPath = Path.Combine(_inputDirectory, Path.GetDirectoryName(relativePath));
+
+            Directory.CreateDirectory(extractPath);
+            ExtractFile(file, extractPath);
+        }
+    }
+
     private void ArchiveFile(string inputFile, string outputFile)
     {
         var command = $".\\7z.exe a -t7z \"{outputFile}\" \"{inputFile}\" -mhe=on -mx=9 -p\"{_secretKey}\"";
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/C {command}",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processStartInfo);
+        process.WaitForExit();
+    }
+
+    private void ExtractFile(string inputFile, string extractPath)
+    {
+        var command = $".\\7z.exe x \"{inputFile}\" -o\"{extractPath}\" -p\"{_secretKey}\" -y";
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "cmd.exe",
@@ -68,3 +95,4 @@ class FileProcessor
         }
     }
 }
+

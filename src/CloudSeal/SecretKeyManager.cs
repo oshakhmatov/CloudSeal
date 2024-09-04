@@ -1,8 +1,6 @@
 ﻿using Meziantou.Framework.Win32;
 using System.Security.Cryptography;
 
-namespace CloudSeal;
-
 class SecretKeyManager
 {
     private readonly string _credentialName;

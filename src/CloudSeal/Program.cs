@@ -1,6 +1,4 @@
-﻿using CloudSeal;
-
-var secretKeyManager = new SecretKeyManager("CloudSealSecretKey");
+﻿var secretKeyManager = new SecretKeyManager("CloudSealSecretKey");
 var secretKey = secretKeyManager.GetOrCreateSecretKey();
 
 if (string.IsNullOrEmpty(secretKey))
@@ -9,5 +7,20 @@ if (string.IsNullOrEmpty(secretKey))
     return;
 }
 
-var fileProcessor = new FileProcessor(secretKey, "Local", "SealedCloud");
-fileProcessor.ProcessFiles();
+Console.WriteLine("Would you like to (1) Save data or (2) Read data?");
+var choice = Console.ReadLine();
+
+if (choice == "1")
+{
+    var fileProcessor = new FileProcessor(secretKey, "Local", "SealedCloud");
+    fileProcessor.ProcessFiles();
+}
+else if (choice == "2")
+{
+    var fileProcessor = new FileProcessor(secretKey, "View", "SealedCloud");
+    fileProcessor.ReadFiles();
+}
+else
+{
+    Console.WriteLine("Invalid option. Exiting.");
+}
