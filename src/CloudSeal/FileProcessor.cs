@@ -23,7 +23,7 @@ class FileProcessor
     {
         ClearDirectory(localDir);
 
-        SealLocalData();
+        
 
         CopyDirectory(cloudDir, localDir);
         Console.WriteLine("\nСинхронизация локальных данных с облаком завершена.");
@@ -32,6 +32,8 @@ class FileProcessor
     public void SyncCloudWithLocal()
     {
         ClearDirectory(cloudDir, preserveSpecial: true);
+
+        SealLocalData();
 
         CopyDirectory(localDir, cloudDir);
 
