@@ -3,9 +3,9 @@ using System.Security.Cryptography;
 
 class SecretKeyManager
 {
-    private const string CredentialName = "CloudSealSecretKey"; // Определяем константу
+    private const string CredentialName = "CloudSealSecretKey";
 
-    public string GetOrCreateSecretKey()
+    public static string GetOrCreateSecretKey()
     {
         var credential = CredentialManager.ReadCredential(CredentialName);
 
@@ -15,7 +15,7 @@ class SecretKeyManager
             var password = Console.ReadLine();
             if (!string.IsNullOrEmpty(password) && credential.Password == password)
             {
-                return credential.UserName; // Возвращаем секретный ключ
+                return credential.UserName;
             }
         }
         else
@@ -23,10 +23,10 @@ class SecretKeyManager
             return CreateNewSecretKey();
         }
 
-        return null; // Возвращаем null, если пароль неверный или нет ключа
+        return null;
     }
 
-    public string CreateNewSecretKey()
+    public static string CreateNewSecretKey()
     {
         Console.Write("Введите новый секретный ключ (оставьте пустым для автоматической генерации): ");
         var newSecretKey = Console.ReadLine();
@@ -55,18 +55,13 @@ class SecretKeyManager
         Console.WriteLine("Секретный ключ удален.");
     }
 
-    public string GetSecretKeyName()
-    {
-        return CredentialName;
-    }
-
-    public string GetSecretKey()
+    public static string GetSecretKey()
     {
         var credential = CredentialManager.ReadCredential(CredentialName);
         return credential?.UserName;
     }
 
-    public void SaveSecretKey(string secretKey, string password)
+    public static void SaveSecretKey(string secretKey, string password)
     {
         CredentialManager.WriteCredential(CredentialName, secretKey, password, "Application secret key", CredentialPersistence.LocalMachine);
         Console.WriteLine("Секретный ключ сохранен.");

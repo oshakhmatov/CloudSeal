@@ -54,7 +54,7 @@
         }
     }
 
-    private void ShowMenu()
+    private static void ShowMenu()
     {
         Console.WriteLine("\nВыберите действие:");
         Console.WriteLine("1: Синхронизировать локальные данные с облаком");
@@ -66,7 +66,7 @@
         Console.WriteLine("7: О приложении");
     }
 
-    private void ShowUsageInstructions()
+    private static void ShowUsageInstructions()
     {
         Console.WriteLine("\nКак пользоваться:");
         Console.WriteLine("В папке SealedCloud будут храниться зашифрованные данные, укажите эту папку для любого облака.");
@@ -86,7 +86,7 @@
         Console.WriteLine("Ни в коем случае не удаляйте ключ, если остались данные, которые запечатаны им. Сначала распечатайте их.");
     }
 
-    private void ShowAboutInformation()
+    private static void ShowAboutInformation()
     {
         Console.WriteLine("\nЭто приложение - мощное средство для защиты и управления данными. Оно использует передовой алгоритм шифрования AES-256, который признан одним из самых безопасных в мире.");
         Console.WriteLine("Ваши данные надежно защищены даже в облаке благодаря этому сквозному шифрованию.");
@@ -98,7 +98,7 @@
 
     private string InitializeSecretKey()
     {
-        var secretKey = _secretKeyManager.GetOrCreateSecretKey();
+        var secretKey = SecretKeyManager.GetOrCreateSecretKey();
 
         while (string.IsNullOrEmpty(secretKey))
         {
@@ -111,14 +111,14 @@
             if (choice == "2")
             {
                 _secretKeyManager.DeleteSecretKey();
-                secretKey = _secretKeyManager.CreateNewSecretKey();
+                secretKey = SecretKeyManager.CreateNewSecretKey();
                 Console.WriteLine($"Новый секретный ключ: {secretKey}");
                 Console.WriteLine("Рекомендуется сохранить этот ключ в надёжном менеджере паролей на случай утери ПК.");
                 break;
             }
             else
             {
-                secretKey = _secretKeyManager.GetOrCreateSecretKey();
+                secretKey = SecretKeyManager.GetOrCreateSecretKey();
             }
         }
 
@@ -151,8 +151,7 @@
 
     private void ManageSecretKey()
     {
-        Console.WriteLine($"Текущий секретный ключ: {_secretKeyManager.GetSecretKeyName()}");
-        Console.WriteLine($"Секретный ключ: {_secretKeyManager.GetSecretKey()}");
+        Console.WriteLine($"Секретный ключ: {SecretKeyManager.GetSecretKey()}");
 
         Console.WriteLine("\nВыберите действие:");
         Console.WriteLine("1: Вернуться");
@@ -168,7 +167,7 @@
             if (confirmation.ToLower() == "да")
             {
                 _secretKeyManager.DeleteSecretKey();
-                var newSecretKey = _secretKeyManager.CreateNewSecretKey();
+                var newSecretKey = SecretKeyManager.CreateNewSecretKey();
                 Console.WriteLine($"Новый секретный ключ: {newSecretKey}");
                 Console.WriteLine("Рекомендуется сохранить этот ключ в надёжном менеджере паролей на случай утери ПК.");
                 _secretKey = newSecretKey;

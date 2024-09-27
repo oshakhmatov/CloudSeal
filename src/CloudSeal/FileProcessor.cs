@@ -22,9 +22,6 @@ class FileProcessor
     public void SyncLocalWithCloud()
     {
         ClearDirectory(localDir);
-
-        
-
         CopyDirectory(cloudDir, localDir);
         Console.WriteLine("\nСинхронизация локальных данных с облаком завершена.");
     }
@@ -32,11 +29,8 @@ class FileProcessor
     public void SyncCloudWithLocal()
     {
         ClearDirectory(cloudDir, preserveSpecial: true);
-
         SealLocalData();
-
         CopyDirectory(localDir, cloudDir);
-
         Console.WriteLine("\nСинхронизация облачных данных с локальными завершена.");
     }
 
@@ -88,7 +82,7 @@ class FileProcessor
         });
     }
 
-    private void ProcessFiles(string directory, Action<string> fileAction)
+    private static void ProcessFiles(string directory, Action<string> fileAction)
     {
         var files = Directory.GetFiles(directory, "*.*", SearchOption.AllDirectories);
         foreach (var file in files)
@@ -97,7 +91,7 @@ class FileProcessor
         }
     }
 
-    private void ClearDirectory(string directory, bool preserveSpecial = false)
+    private static void ClearDirectory(string directory, bool preserveSpecial = false)
     {
         foreach (var file in Directory.GetFiles(directory, "*", SearchOption.AllDirectories))
         {
@@ -116,7 +110,7 @@ class FileProcessor
         }
     }
 
-    private void CopyDirectory(string sourceDir, string targetDir)
+    private static void CopyDirectory(string sourceDir, string targetDir)
     {
         Directory.CreateDirectory(targetDir);
 
@@ -143,7 +137,7 @@ class FileProcessor
         ExecuteCommand($".\\7z.exe x \"{inputFile}\" -o\"{Path.GetDirectoryName(outputFile)}\" -p\"{_secretKey}\" -y");
     }
 
-    private void ExecuteCommand(string command)
+    private static void ExecuteCommand(string command)
     {
         var processStartInfo = new ProcessStartInfo
         {
